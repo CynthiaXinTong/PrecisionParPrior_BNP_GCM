@@ -1,0 +1,83 @@
+model{
+  # Model specification for linear growth curve model
+	for (i in 1:N){
+		LS[i,1:2]~dmnorm(muLS[i,1:2], Inv_cov[1:2,1:2])
+
+		muLS[i,1]<-bL[1]
+    	 	muLS[i,2]<-bS[1]
+
+		for (t in 1:T){
+			y[i, t] ~ dnorm(muY[i,t], taue[i])
+			muY[i,t] <- LS[i,1]+LS[i,2]*(t-1)
+		}
+		taue[i] <- taue.mix[groupe[i]]
+		groupe[i] ~ dcat(pei[])
+			
+		for (j in 1:20){
+			ginde[i,j] <- equals(j,groupe[i])
+		}
+	}
+     
+	#Priors for model parameter
+	for (i in 1:1){
+     		bL[i] ~ dnorm(0, 1.0E-6)
+		bS[i] ~ dnorm(0, 1.0E-6)
+	}
+
+	## stick breaking construction
+	pe[1]<-qe[1] 
+	for (j in 2:20){
+     		pe[j] <- qe[j] * (1 - qe[j - 1]) * pe[j -1 ] / qe[j - 1]
+	}
+	
+	for (j in 1:20){
+		qe[j] ~dbeta(1, alpha)T(0.0001,0.9999)
+		pei[j] <- pe[j]/sum(pe[])
+		taue.mix[j] ~ dgamma(aprece,bprece)
+	}
+
+	##DP precision parameter
+	alpha~dgamma(100,100) 
+	
+	aprece <- 2
+	bprece ~dgamma(2,2)
+	
+	##total clusters
+	Ke <- sum(cle[])
+	for (j in 1:20) {
+		suminde[j] <- sum(ginde[,j])
+		cle[j] <- step(suminde[j]-1)
+	}
+		
+	Inv_cov[1:2,1:2]~dwish(R[1:2,1:2], 2)
+	R[1,1]<-1
+	R[2,2]<-1
+	R[2,1]<-R[1,2]
+	R[1,2]<-0
+
+	para[1] <- bL[1]
+	para[2] <- bS[1]
+	
+	Cov[1:2,1:2]<-inverse(Inv_cov[1:2,1:2])
+	para[3] <- Cov[1,1]
+	para[4] <- Cov[2,2]
+	para[5] <- Cov[1,2]
+
+
+	for (i in 1:N){
+		for (t in 1:T){
+			par[i,t] <- y[i,t]-LS[i,1]-LS[i,2]*(t-1)
+		}
+	}
+
+	for (t in 1:T){
+		for(i in 1:N){
+		err[(t-1)*N+i] <- par[i,t]
+		}
+	}
+	
+	para[6] <- sd(err[])*sd(err[])
+	para[7] <- Ke
+	para[8] <- alpha
+	para[9] <- bprece
+}
